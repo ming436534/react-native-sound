@@ -1,5 +1,6 @@
 package com.zmxv.RNSound;
 
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
 import android.media.MediaPlayer.OnErrorListener;
@@ -13,8 +14,11 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.WritableMap;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+
+import static android.media.AudioManager.STREAM_ALARM;
 
 public class RNSoundModule extends ReactContextBaseJavaModule {
   Map<Integer, MediaPlayer> playerPool = new HashMap<>();
@@ -32,8 +36,8 @@ public class RNSoundModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void prepare(final String fileName, final Integer key, final Callback callback) {
-    MediaPlayer player = createMediaPlayer(fileName);
+  public void prepare(final String fileName, final Integer key, final int type, final Callback callback) {
+    MediaPlayer player = createMediaPlayer(fileName, type);
     if (player == null) {
       WritableMap e = Arguments.createMap();
       e.putInt("code", -1);
@@ -43,7 +47,11 @@ public class RNSoundModule extends ReactContextBaseJavaModule {
     }
     try {
       player.prepare();
-    } catch (Exception e) {
+    } catch (Exception err) {
+      WritableMap e = Arguments.createMap();
+      e.putInt("code", -2);
+      e.putString("message", "cannot load url");
+      callback.invoke(e);
     }
     this.playerPool.put(key, player);
     WritableMap props = Arguments.createMap();
@@ -51,15 +59,26 @@ public class RNSoundModule extends ReactContextBaseJavaModule {
     callback.invoke(NULL, props);
   }
 
-  protected MediaPlayer createMediaPlayer(final String fileName) {
+  protected MediaPlayer createMediaPlayer(final String fileName, final int type) {
     int res = this.context.getResources().getIdentifier(fileName, "raw", this.context.getPackageName());
+    MediaPlayer player;
     if (res != 0) {
-      return MediaPlayer.create(this.context, res);
-    }
-    File file = new File(fileName);
-    if (file.exists()) {
-      Uri uri = Uri.fromFile(file);
-      return MediaPlayer.create(this.context, uri);
+      player = MediaPlayer.create(this.context, res);
+      player.setAudioStreamType(type);
+      return player;
+    } else {
+      player = new MediaPlayer();
+      player.setAudioStreamType(type);
+      File file = new File(fileName);
+      if (file.exists()) {
+        Uri uri = Uri.fromFile(file);
+        try {
+          player.setDataSource(this.context, uri);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        return player;
+      }
     }
     return null;
   }
@@ -161,6 +180,14 @@ public class RNSoundModule extends ReactContextBaseJavaModule {
   public Map<String, Object> getConstants() {
     final Map<String, Object> constants = new HashMap<>();
     constants.put("IsAndroid", true);
+    constants.put("STREAM_ALARM", AudioManager.STREAM_ALARM);
+    constants.put("STREAM_DTMF", AudioManager.STREAM_DTMF);
+    constants.put("STREAM_MUSIC", AudioManager.STREAM_MUSIC);
+    constants.put("STREAM_NOTIFICATION", AudioManager.STREAM_NOTIFICATION);
+    constants.put("STREAM_RING", AudioManager.STREAM_RING);
+    constants.put("STREAM_SYSTEM", AudioManager.STREAM_SYSTEM);
+    constants.put("STREAM_VOICE_CALL", AudioManager.STREAM_VOICE_CALL);
+    constants.put("USE_DEFAULT_STREAM_TYPE", AudioManager.USE_DEFAULT_STREAM_TYPE);
     return constants;
   }
 }

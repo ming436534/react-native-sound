@@ -1,14 +1,16 @@
 'use strict';
 
+import { Platform } from 'react-native';
+
 var RNSound = require('react-native').NativeModules.RNSound;
 var IsAndroid = RNSound.IsAndroid;
 var resolveAssetSource = require("react-native/Libraries/Image/resolveAssetSource");
 var nextKey = 0;
 
+
 function isRelativePath(path) {
   return !/^\//.test(path);
 }
-
 function Sound(filename, basePath, onError) {
   var asset = resolveAssetSource(filename);
   if (asset) {
@@ -21,7 +23,7 @@ function Sound(filename, basePath, onError) {
       this._filename = filename.toLowerCase().replace(/\.[^.]+$/, '');
     }
   }
-
+  this._onError = onError;
   this._loaded = false;
   this._key = nextKey++;
   this._duration = -1;
@@ -29,7 +31,10 @@ function Sound(filename, basePath, onError) {
   this._volume = 1;
   this._pan = 0;
   this._numberOfLoops = 0;
-  RNSound.prepare(this._filename, this._key, (error, props) => {
+}
+
+Sound.prototype.prepare = function() {
+  var onError = (error, props) => {
     if (props) {
       if (typeof props.duration === 'number') {
         this._duration = props.duration;
@@ -41,9 +46,37 @@ function Sound(filename, basePath, onError) {
     if (error === null) {
       this._loaded = true;
     }
-    onError && onError(error);
-  });
+    this._onError && this._onError(error);
+  }
+
+  if (Platform.OS === 'ios') {
+    RNSound.prepare(this._filename, this._key, onError);
+  } else {
+    RNSound.prepare(this._filename, this._key, this._streamType, onError);
+  }
 }
+
+Sound.prototype.setAudioStreamType = function(streamType) {
+  if (Platform.OS === 'android' && this._streamType != streamType) {
+    if (this._loaded) {
+      RNSound.release();
+      this._loaded = false;
+      RNSound.prepare(this._filename, this._key, streamType, (error, props) => {
+        if (error === null) {
+          this._loaded = true;
+        } else {
+          onError && onError(error);
+        }
+      });
+    } else {
+      this._streamType = streamType;
+    }
+  } else {
+    throw 'this function is android only';
+  }
+  return this;
+}
+
 
 Sound.prototype.isLoaded = function() {
   return this._loaded;
@@ -164,5 +197,16 @@ Sound.MAIN_BUNDLE = RNSound.MainBundlePath;
 Sound.DOCUMENT = RNSound.NSDocumentDirectory;
 Sound.LIBRARY = RNSound.NSLibraryDirectory;
 Sound.CACHES = RNSound.NSCachesDirectory;
+
+Sound.STREAM_TYPE = {};
+Sound.STREAM_TYPE.STREAM_ALARM = RNSound.STREAM_ALARM;
+Sound.STREAM_TYPE.STREAM_DTMF = RNSound.STREAM_DTMF;
+Sound.STREAM_TYPE.STREAM_MUSIC = RNSound.STREAM_MUSIC;
+Sound.STREAM_TYPE.STREAM_NOTIFICATION = RNSound.STREAM_NOTIFICATION;
+Sound.STREAM_TYPE.STREAM_RING = RNSound.STREAM_RING;
+Sound.STREAM_TYPE.STREAM_SYSTEM = RNSound.STREAM_SYSTEM;
+Sound.STREAM_TYPE.STREAM_VOICE_CALL = RNSound.STREAM_VOICE_CALL;
+Sound.STREAM_TYPE.USE_DEFAULT_STREAM_TYPE = RNSound.USE_DEFAULT_STREAM_TYPE;
+
 
 module.exports = Sound;
