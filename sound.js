@@ -48,7 +48,7 @@ Sound.prototype.prepare = function() {
     }
     this._onError && this._onError(error);
   }
-
+  if (this._streamType == null) this._streamType = RNSound.STREAM_MUSIC;
   if (Platform.OS === 'ios') {
     RNSound.prepare(this._filename, this._key, onError);
   } else {
